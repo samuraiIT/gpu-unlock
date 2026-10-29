@@ -3,6 +3,10 @@
 /build/
 /.inputs/
 **/__pycache__/
+# Private hardware captures and task backups stay local.
+/docs/ai/gpu-unlock-rtx4070-win11/evidence/
+/docs/ai/gpu-unlock-rtx4070-win11/backups/
+/windows/rtx4070-laptop-probe/build/
 *.pyc
 *.ko
 *.o

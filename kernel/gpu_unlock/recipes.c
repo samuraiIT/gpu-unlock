@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "recipes.h"
 #include "registers.h"
+#ifdef __KERNEL__
+#include <linux/string.h>
+#else
+#include <string.h>
+#include <strings.h>
+#endif
 
 /* GA102 re-entrant call table. The Booter dispatches the frame RET into
  * these gadgets and performs the privileged writes from the value/address
@@ -441,4 +447,46 @@ const struct gu_card *gu_card_find(u16 device)
 		if (cards[i].device == device)
 			return &cards[i];
 	return NULL;
+}
+
+/* Exact, case-insensitive PCI addresses. No prefix or wildcard matching. */
+bool gu_target_listed(const char *targets, const char *pci_name)
+{
+	const char *entry, *end;
+	size_t length;
+
+	if (!targets || !pci_name || !*pci_name)
+		return false;
+	length = strlen(pci_name);
+	for (entry = targets; *entry; entry = *end ? end + 1 : end) {
+		end = strchr(entry, ',');
+		if (!end)
+			end = entry + strlen(entry);
+		if (length == (size_t)(end - entry) && !strncasecmp(pci_name, entry, length))
+			return true;
+	}
+	return false;
+}
+
+/* NVAPI on the target board reports architecture 0x190, implementation 6.
+ * That establishes the AD106 identity, NOT firmware or unlock compatibility.
+ * Reuse the upstream AD10x transaction only as an explicitly selected cold-boot
+ * research candidate. Keep it out of cards[] so targets=all cannot select it.
+ */
+static const struct gu_card ad106m_2820 = AD106(0x2820);
+
+const struct gu_card *gu_card_select(u16 device, u16 subvendor, u16 subdevice,
+				   u8 revision, bool mobile_opt_in, bool exact_target)
+{
+	if (device != ad106m_2820.device)
+		return gu_card_find(device);
+	if (!mobile_opt_in || !exact_target || subvendor != 0x1558 ||
+	    subdevice != 0x0157 || revision != 0xa1)
+		return NULL;
+	return &ad106m_2820;
+}
+
+bool gu_card_can_resume(const struct gu_card *card)
+{
+	return card && card != &ad106m_2820;
 }

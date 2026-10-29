@@ -1582,6 +1582,10 @@ int gpu_unlock_610_unlock(const struct gu_device *device, const struct gpu_unloc
 
 	if (!device->recipe || !device->recipe->family)
 		return -ENODEV;
+	/* The mobile candidate has no suspend/resume qualification. Reject before
+	 * claiming the device, allocating DMA or touching any GPU registers. */
+	if (resume && !gu_card_can_resume(device->recipe))
+		return -EOPNOTSUPP;
 	work = kzalloc(sizeof(*work), GFP_KERNEL);
 	if (!work)
 		return -ENOMEM;

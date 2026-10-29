@@ -13,7 +13,11 @@
 
 static char *targets;
 module_param(targets, charp, 0444);
-MODULE_PARM_DESC(targets, "\"all\" or comma-separated PCI addresses of supported Ampere cards to unlock");
+MODULE_PARM_DESC(targets, "\"all\" or comma-separated PCI addresses; experimental mobile targets require an exact address and separate opt-in");
+
+static bool rtx4070_laptop_experimental;
+module_param(rtx4070_laptop_experimental, bool, 0444);
+MODULE_PARM_DESC(rtx4070_laptop_experimental, "UNVERIFIED cold-boot research for 10de:2820 subsystem 1558:0157 revision a1; exact targets address required, never all, no resume");
 
 static bool resume = true;
 module_param(resume, bool, 0644);
@@ -38,7 +42,11 @@ static struct pci_dev *next_supported(struct pci_dev *from, const struct gu_card
 	struct pci_dev *pdev = from;
 
 	while ((pdev = pci_get_device(PCI_VENDOR_ID_NVIDIA, PCI_ANY_ID, pdev)))
-		if ((*recipe = gu_card_find(pdev->device)))
+		if ((*recipe = gu_card_select(pdev->device, pdev->subsystem_vendor,
+					     pdev->subsystem_device, pdev->revision,
+					     rtx4070_laptop_experimental,
+					     targets && strcmp(targets, "all") &&
+					     gu_target_listed(targets, pci_name(pdev)))))
 			return pdev;
 	return NULL;
 }
@@ -69,6 +77,10 @@ static void unlock_again(void *data, async_cookie_t cookie)
 	bool nvidia;
 	int ret = 0;
 
+	if (!gu_card_can_resume(card->device.recipe)) {
+		pci_info(pdev, "gpu_unlock: experimental mobile resume is unqualified; left as is\n");
+		return;
+	}
 	pci_dev_lock(pdev);
 	nvidia = pdev->driver && !strcmp(pdev->driver->name, "nvidia");
 	if (nvidia)
@@ -126,19 +138,6 @@ static struct notifier_block pm_nb = {
 	.priority = 1,
 };
 
-/* True when the comma-separated targets list names this PCI device. */
-static bool listed(const char *name)
-{
-	const char *entry, *end;
-
-	for (entry = targets; *entry; entry = *end ? end + 1 : end) {
-		end = strchrnul(entry, ',');
-		if (strlen(name) == end - entry && !strncasecmp(name, entry, end - entry))
-			return true;
-	}
-	return false;
-}
-
 static void report_unmatched(void)
 {
 	const char *entry, *end;
@@ -174,7 +173,7 @@ static int __init gpu_unlock_init(void)
 		return 0;
 	all = !strcmp(targets, "all");
 	while ((pdev = next_supported(pdev, &recipe))) {
-		if (!all && !listed(pci_name(pdev)))
+		if (!all && !gu_target_listed(targets, pci_name(pdev)))
 			continue;
 		card = kzalloc(sizeof(*card), GFP_KERNEL);
 		if (!card) {
@@ -185,6 +184,8 @@ static int __init gpu_unlock_init(void)
 		}
 		card->device.pdev = pci_dev_get(pdev);
 		card->device.recipe = recipe;
+		if (!gu_card_can_resume(recipe))
+			pci_warn(pdev, "gpu_unlock: UNVERIFIED mobile cold-boot experiment; no Windows support or throughput qualification\n");
 		list_add_tail(&card->node, &cards);
 	}
 	if (!all && enumerated)

@@ -11,3 +11,12 @@
 *.rom export-ignore
 *.cu export-ignore
 /debian -export-ignore
+# Keep the research Windows tooling available in source archives.
+/windows -export-ignore
+/tools -export-ignore
+/tests -export-ignore
+/docs -export-ignore
+/RESEARCH_4070_LAPTOP_RU.md -export-ignore
+# Build IDs and the vendor manifest pin exact bytes across Windows checkouts.
+/windows/rtx4070-laptop-probe/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/tests/mobile-admission.sh text eol=lf

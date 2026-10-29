@@ -71,4 +71,9 @@ struct gu_card {
 #define GU_WRITE_TABLE(t) { .entries = (t), .count = sizeof(t) / sizeof((t)[0]) }
 
 const struct gu_card *gu_card_find(u16 device);
+bool gu_target_listed(const char *targets, const char *pci_name);
+/* Research-only mobile selection. Never admitted by the ordinary lookup. */
+const struct gu_card *gu_card_select(u16 device, u16 subvendor, u16 subdevice,
+				   u8 revision, bool mobile_opt_in, bool exact_target);
+bool gu_card_can_resume(const struct gu_card *card);
 #endif
